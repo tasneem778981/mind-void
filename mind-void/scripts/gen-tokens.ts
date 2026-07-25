@@ -214,6 +214,15 @@ export const productCopy = {
   thesis: 'closure, not checkboxes.',
   architectureCredit:
     'InputAdapter → FSM → DomView + EffectBus → ParticleEngine',
+  /** Accessible names for shard bodies (AD-25) — index matches shard order. */
+  optionLabels: [
+    'Option A',
+    'Option B',
+    'Option C',
+    'Option D',
+    'Option E',
+  ],
+  decisionNodeLabel: 'Unresolved decision',
 } as const;
 
 export type ProductCopy = typeof productCopy;

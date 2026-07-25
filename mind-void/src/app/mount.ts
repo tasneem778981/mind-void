@@ -13,7 +13,9 @@ import { VoidCanvas } from '../adapters/web/void-canvas';
 import { DomView } from '../adapters/web/dom-view';
 import { TimeoutClock } from '../adapters/web/raf-clock';
 import { PointerAdapter } from '../adapters/web/pointer-adapter';
+import { KeyboardAdapter } from '../adapters/web/keyboard-adapter';
 import '../styles/tokens.generated.css';
+import '../styles/void.css';
 
 export type MountOpts = {
   shards?: unknown;
@@ -129,8 +131,24 @@ export function mountMindVoid(
     view.render(fsm.snapshot(), lastGeometry, motionProfile);
   };
 
-  const unsubscribe = fsm.subscribe(() => {
+  const pointer = new PointerAdapter({
+    surface,
+    dispatch: (intent) => {
+      fsm.dispatch(intent);
+    },
+    getCursor: () => view.cursorElement,
+  });
+
+  const keyboard = new KeyboardAdapter({
+    surface,
+    dispatch: (intent) => {
+      fsm.dispatch(intent);
+    },
+  });
+
+  const unsubscribe = fsm.subscribe((snapshot) => {
     paint();
+    pointer.observeSnapshot(snapshot);
   });
 
   const layout = (): void => {
@@ -147,6 +165,7 @@ export function mountMindVoid(
       DEFAULT_SEAM_CONFIG,
     );
     paint();
+    pointer.onGeometryChanged();
   };
 
   const resizeObserver = new ResizeObserver(() => {
@@ -156,14 +175,8 @@ export function mountMindVoid(
   resizeObserver.observe(shell);
   layout();
 
-  const pointer = new PointerAdapter({
-    surface,
-    dispatch: (intent) => {
-      fsm.dispatch(intent);
-    },
-    getCursor: () => view.cursorElement,
-  });
   pointer.attach();
+  keyboard.attach();
 
   let alive = true;
   const listeners: TrackedListener[] = [];
@@ -181,6 +194,7 @@ export function mountMindVoid(
     alive = false;
 
     pointer.detach();
+    keyboard.detach();
     resizeObserver.disconnect();
     unsubscribe();
     view.clear();

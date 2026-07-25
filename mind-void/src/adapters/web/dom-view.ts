@@ -13,7 +13,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export type CursorMode = 'idle' | 'attract' | 'repulse' | 'hidden';
 
 /**
- * One-way snapshot → DOM (AD-2, AD-7, AD-10, AD-20).
+ * One-way snapshot → DOM (AD-2, AD-7, AD-10, AD-20, AD-25).
  * Cursor **mode** owned here; cursor **position** owned by PointerAdapter.
  */
 export class DomView {
@@ -24,8 +24,11 @@ export class DomView {
   private readonly thesisEl: HTMLParagraphElement;
   private readonly creditEl: HTMLParagraphElement;
   private readonly cursorEl: HTMLDivElement;
+  private readonly onMouseDown: (event: MouseEvent) => void;
   private copyMounted = false;
   private cursorMounted = false;
+  private mouseGuardAttached = false;
+  private lastFocusedId: string | null = null;
 
   constructor(surface: Surface) {
     this.surface = surface;
@@ -57,6 +60,15 @@ export class DomView {
       <span class="mv-cursor-tick mv-cursor-tick-s"></span>
       <span class="mv-cursor-tick mv-cursor-tick-w"></span>
     `;
+
+    // Pointer must not steal keyboard focus (AD-8).
+    this.onMouseDown = (event: MouseEvent) => {
+      const t = event.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest('[data-zone="body"]')) {
+        event.preventDefault();
+      }
+    };
   }
 
   /** PointerAdapter writes transform here only (AD-10). */
@@ -73,6 +85,8 @@ export class DomView {
     this.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     this.svg.setAttribute('width', String(width));
     this.svg.setAttribute('height', String(height));
+    this.svg.setAttribute('role', 'listbox');
+    this.svg.setAttribute('aria-label', productCopy.decisionNodeLabel);
 
     const root = this.surface.layers.vignette.parentElement;
     if (root) {
@@ -108,13 +122,26 @@ export class DomView {
         group.dataset.preview = snapshot.previewMode;
       }
 
+      if (snapshot.focusedShardId === shard.id) {
+        group.dataset.focused = '1';
+      }
+
+      const label =
+        productCopy.optionLabels[shard.index] ??
+        productCopy.optionLabels[productCopy.optionLabels.length - 1]!;
+
       const body = document.createElementNS(SVG_NS, 'path');
       body.setAttribute('d', pointsToSvgPath(shard.body));
       body.classList.add('mv-shard-body');
       body.setAttribute('data-shard-id', shard.id);
       body.setAttribute('data-zone', 'body');
-      body.setAttribute('tabindex', '-1');
-      body.setAttribute('role', 'presentation');
+      body.setAttribute('tabindex', '0');
+      body.setAttribute('role', 'option');
+      body.setAttribute('aria-label', label);
+      body.setAttribute(
+        'aria-selected',
+        snapshot.focusedShardId === shard.id ? 'true' : 'false',
+      );
 
       const rim = document.createElementNS(SVG_NS, 'path');
       rim.setAttribute('d', pointsToSvgPath(shard.rim));
@@ -122,6 +149,7 @@ export class DomView {
       rim.setAttribute('data-shard-id', shard.id);
       rim.setAttribute('data-zone', 'rim');
       rim.setAttribute('aria-hidden', 'true');
+      rim.setAttribute('tabindex', '-1');
 
       group.append(body, rim);
       node.append(group);
@@ -139,14 +167,13 @@ export class DomView {
     node.append(seams);
 
     this.svg.append(node);
+    this.syncDomFocus(snapshot.focusedShardId);
   }
 
   setCursorVisible(visible: boolean): void {
     if (!visible) {
       this.cursorEl.dataset.cursor = 'hidden';
-      return;
     }
-    // Visibility restored on next render mode sync / pointer move path.
   }
 
   clear(): void {
@@ -157,8 +184,11 @@ export class DomView {
     this.thesisEl.remove();
     this.creditEl.remove();
     this.cursorEl.remove();
+    this.svg.removeEventListener('mousedown', this.onMouseDown);
     this.copyMounted = false;
     this.cursorMounted = false;
+    this.mouseGuardAttached = false;
+    this.lastFocusedId = null;
   }
 
   private ensureChrome(root: HTMLElement | null): void {
@@ -166,6 +196,10 @@ export class DomView {
     if (!this.cursorMounted && root) {
       root.append(this.cursorEl);
       this.cursorMounted = true;
+    }
+    if (!this.mouseGuardAttached) {
+      this.svg.addEventListener('mousedown', this.onMouseDown);
+      this.mouseGuardAttached = true;
     }
   }
 
@@ -196,5 +230,26 @@ export class DomView {
     this.hintEl.hidden = isSolid;
     this.thesisEl.hidden = !isSolid;
     this.creditEl.hidden = false;
+  }
+
+  /** Apply DOM focus from FSM truth (AD-13 / AD-25). */
+  private syncDomFocus(focusedShardId: string | null): void {
+    if (!focusedShardId) {
+      this.lastFocusedId = null;
+      return;
+    }
+    const body = this.svg.querySelector(
+      `[data-zone="body"][data-shard-id="${CSS.escape(focusedShardId)}"]`,
+    );
+    if (!(body instanceof SVGElement)) return;
+
+    if (
+      document.activeElement === body &&
+      this.lastFocusedId === focusedShardId
+    ) {
+      return;
+    }
+    this.lastFocusedId = focusedShardId;
+    body.focus({ preventScroll: true });
   }
 }

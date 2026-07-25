@@ -23,7 +23,7 @@ export class VoidCanvas implements Surface {
 
     const shards = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     shards.classList.add('mv-layer', 'mv-layer-shards');
-    shards.setAttribute('aria-hidden', 'true');
+    // Not aria-hidden: shard bodies are the keyboard/AT focusables (AD-25).
     shards.style.touchAction = 'none';
 
     const fx = document.createElement('canvas');

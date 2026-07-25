@@ -137,6 +137,16 @@ body {
   stroke: var(--mv-repulse-edge);
 }
 
+/* Focus ring — never charge-glow (UX-DR12, AD-8) */
+.mv-shard-body:focus {
+  outline: none;
+}
+
+.mv-shard[data-focused='1'] .mv-shard-body {
+  outline: 2px solid var(--mv-focus-ring);
+  outline-offset: var(--mv-space-1);
+}
+
 .mv-seam {
   fill: none;
   stroke: var(--mv-seam);
