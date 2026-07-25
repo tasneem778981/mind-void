@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mind Void — Key Screen: Void</title>
+<style>
+/*
+  Governed by:
+    DESIGN.md  → Colors, Shapes, Elevation & Depth, Components
+    EXPERIENCE.md → Information Architecture (Void + zones), State Patterns, Key Flows UJ-1
+  States shown: Idle (cold load) · Solo preview · Mute preview · Solid (DeferReveal resolved)
+  Offline, no JS, no network. Tokens copied from DESIGN.md frontmatter.
+*/
+:root{
+  --void-abyss:#020A08; --void-base:#05130F; --void-haze:#0A2019;
+  --shard-face:#0E2A22; --shard-face-solo:#154538; --shard-face-mute:#081713;
+  --shard-edge:#1C4E40; --seam:#0A1C17;
+  --charge-core:#14B181; --charge-glow:#3FE0A8; --charge-pulse:#26C48F;
+  --solid-face:#176249; --solid-halo:#5CF0BC;
+  --repulse-edge:#4E7C74; --cut-flash:#A7F3E4;
+  --ink-primary:#D7EFE6; --ink-secondary:#7DA79A; --ink-faint:#3E5C53;
+  --mono:ui-monospace,'SF Mono','Cascadia Mono',monospace;
+  --sans:'Inter',ui-sans-serif,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;font-family:var(--sans);padding:32px;color:var(--ink-secondary)}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+h1{font-size:13px;font-family:var(--mono);letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase}
+.frame{border:1px solid #12241E;border-radius:10px;overflow:hidden;background:var(--void-base)}
+.chrome{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#081713;border-bottom:1px solid #12241E}
+.dot{width:9px;height:9px;border-radius:9999px;background:#16332B}
+.url{margin-left:10px;font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+.stage{position:relative;height:400px;
+  background:radial-gradient(ellipse at 50% 45%, var(--void-haze) 0%, var(--void-base) 55%, var(--void-abyss) 100%);
+  display:flex;align-items:center;justify-content:center}
+.caption{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--ink-faint);padding:10px 14px;border-top:1px solid #12241E;background:#04100D}
+.hint{position:absolute;left:0;right:0;bottom:48px;text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--ink-faint)}
+.credit{position:absolute;right:24px;bottom:16px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:#28433B}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.cursor{position:absolute;font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:.06em}
+@keyframes pulse{0%,100%{opacity:.72}50%{opacity:1}}
+.pulse{animation:pulse 3200ms cubic-bezier(0.4,0,0.2,1) infinite}
+@media (prefers-reduced-motion: reduce){.pulse{animation:none;opacity:.86}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Mind Void — Void surface · key states</h1>
+
+  <!-- ============ IDLE / COLD LOAD ============ -->
+  <div class="frame">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">mindvoid.demo</span></div>
+    <div class="stage">
+      <svg width="300" height="300" viewBox="0 0 300 300" class="pulse">
+        <defs>
+          <filter id="glowIdle" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g filter="url(#glowIdle)" opacity=".28">
+          <polygon points="150,50 236.6,100 236.6,200 150,250 63.4,200 63.4,100" fill="none" stroke="var(--charge-core)" stroke-width="2"/>
+        </g>
+        <g stroke="var(--shard-edge)" stroke-width="1" fill="var(--shard-face)">
+          <polygon transform="translate(3,-2)" points="150,150 150,50 236.6,100 236.6,200"/>
+          <polygon transform="translate(0,3)"  points="150,150 236.6,200 150,250 63.4,200"/>
+          <polygon transform="translate(-3,-2)" points="150,150 63.4,200 63.4,100 150,50"/>
+        </g>
+        <g stroke="var(--seam)" stroke-width="2" stroke-linecap="square">
+          <line x1="150" y1="150" x2="150" y2="50"/>
+          <line x1="150" y1="150" x2="236.6" y2="200"/>
+          <line x1="150" y1="150" x2="63.4" y2="200"/>
+        </g>
+      </svg>
+      <div class="hint">something here is unresolved.</div>
+      <div class="credit">InputAdapter → FSM → DomView + EffectBus → ParticleEngine</div>
+    </div>
+    <div class="caption">IDLE · cold load — three shards at rest, opacity pulse 3200ms, hint line present, no chrome</div>
+  </div>
+
+  <!-- ============ PREVIEW STATES ============ -->
+  <div class="grid">
+
+    <div class="frame">
+      <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">solo preview</span></div>
+      <div class="stage">
+        <svg width="300" height="300" viewBox="0 0 300 300">
+          <defs>
+            <filter id="glowSolo" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <g stroke="var(--shard-edge)" stroke-width="1" fill="var(--shard-face)" opacity=".55">
+            <polygon transform="translate(0,3)"  points="150,150 236.6,200 150,250 63.4,200"/>
+            <polygon transform="translate(-3,-2)" points="150,150 63.4,200 63.4,100 150,50"/>
+          </g>
+          <g filter="url(#glowSolo)">
+            <polygon transform="translate(3,-2)" points="150,150 150,50 236.6,100 236.6,200"
+                     fill="var(--shard-face-solo)" stroke="var(--charge-glow)" stroke-width="1.5"/>
+          </g>
+          <g stroke="var(--seam)" stroke-width="2" stroke-linecap="square">
+            <line x1="150" y1="150" x2="150" y2="50"/>
+            <line x1="150" y1="150" x2="236.6" y2="200"/>
+            <line x1="150" y1="150" x2="63.4" y2="200"/>
+          </g>
+          <!-- attract cursor -->
+          <g transform="translate(197,132)">
+            <circle r="9" fill="none" stroke="var(--charge-glow)" stroke-width="1"/>
+            <circle r="2" fill="var(--charge-glow)"/>
+            <line x1="0" y1="-15" x2="0" y2="-11" stroke="var(--charge-glow)" stroke-width="1"/>
+            <line x1="0" y1="15" x2="0" y2="11" stroke="var(--charge-glow)" stroke-width="1"/>
+            <line x1="-15" y1="0" x2="-11" y2="0" stroke="var(--charge-glow)" stroke-width="1"/>
+            <line x1="15" y1="0" x2="11" y2="0" stroke="var(--charge-glow)" stroke-width="1"/>
+          </g>
+        </svg>
+        <div class="cursor" style="right:60px;top:104px">attract</div>
+      </div>
+      <div class="caption">SOLO · pointer on shard body — face lifts + glow, cursor pulls inward</div>
+    </div>
+
+    <div class="frame">
+      <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">mute preview</span></div>
+      <div class="stage">
+        <svg width="300" height="300" viewBox="0 0 300 300">
+          <g stroke="var(--shard-edge)" stroke-width="1" fill="var(--shard-face)" opacity=".55">
+            <polygon transform="translate(0,3)"  points="150,150 236.6,200 150,250 63.4,200"/>
+            <polygon transform="translate(-3,-2)" points="150,150 63.4,200 63.4,100 150,50"/>
+          </g>
+          <polygon transform="translate(3,-2)" points="150,150 150,50 236.6,100 236.6,200"
+                   fill="var(--shard-face-mute)" stroke="var(--repulse-edge)" stroke-width="2.5"/>
+          <g stroke="var(--seam)" stroke-width="2" stroke-linecap="square">
+            <line x1="150" y1="150" x2="150" y2="50"/>
+            <line x1="150" y1="150" x2="236.6" y2="200"/>
+            <line x1="150" y1="150" x2="63.4" y2="200"/>
+          </g>
+          <!-- repulse cursor, sitting on the rim band -->
+          <g transform="translate(239,150)">
+            <circle r="6" fill="none" stroke="var(--repulse-edge)" stroke-width="1"/>
+            <line x1="0" y1="-10" x2="0" y2="-16" stroke="var(--repulse-edge)" stroke-width="1"/>
+            <line x1="0" y1="10" x2="0" y2="16" stroke="var(--repulse-edge)" stroke-width="1"/>
+            <line x1="-10" y1="0" x2="-16" y2="0" stroke="var(--repulse-edge)" stroke-width="1"/>
+            <line x1="10" y1="0" x2="16" y2="0" stroke="var(--repulse-edge)" stroke-width="1"/>
+          </g>
+        </svg>
+        <div class="cursor" style="right:42px;top:176px">repulse</div>
+      </div>
+      <div class="caption">MUTE · pointer on 14px rim band — face drains, edge goes cold, glow off</div>
+    </div>
+
+  </div>
+
+  <!-- ============ SOLID ============ -->
+  <div class="frame">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">deferreveal resolved</span></div>
+    <div class="stage">
+      <svg width="300" height="300" viewBox="0 0 300 300">
+        <defs>
+          <filter id="halo" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="14" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g filter="url(#halo)" opacity=".45">
+          <polygon points="150,50 236.6,100 236.6,200 150,250 63.4,200 63.4,100" fill="none" stroke="var(--solid-halo)" stroke-width="2"/>
+        </g>
+        <polygon points="150,50 236.6,100 236.6,200 150,250 63.4,200 63.4,100"
+                 fill="var(--solid-face)" stroke="var(--solid-halo)" stroke-width="1"/>
+      </svg>
+      <div class="credit">InputAdapter → FSM → DomView + EffectBus → ParticleEngine</div>
+    </div>
+    <div class="caption">SOLID · post-commit — seams gone, hard corners kept, pulse stopped, hint line faded</div>
+  </div>
+
+</div>
+</body>
+</html>

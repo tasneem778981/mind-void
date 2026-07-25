@@ -1,0 +1,26 @@
+# Dependencies & build
+node_modules/
+dist/
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.code-workspace
+
+# Logs / caches
+*.log
+.npm/
+.cache/
+coverage/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# BMad personal overrides (if present)
+_bmad/custom/*.user.toml

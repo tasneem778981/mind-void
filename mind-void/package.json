@@ -1,0 +1,23 @@
+{
+  "name": "mind-void",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run gen:tokens && tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "gen:tokens": "node --experimental-strip-types scripts/gen-tokens.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}
