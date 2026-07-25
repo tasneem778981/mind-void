@@ -1,5 +1,9 @@
 import type { Intent } from '../../core/intents';
-import type { PreviewMode } from '../../core/snapshot';
+import type {
+  DecisionNodeSnapshot,
+  DecisionPhase,
+  PreviewMode,
+} from '../../core/snapshot';
 import type { Surface } from '../../core/ports';
 
 export type PointerDispatch = (intent: Intent) => void;
@@ -11,9 +15,16 @@ export type PointerAdapterOptions = {
   getCursor: () => HTMLElement | null;
 };
 
+const LOCKED: ReadonlySet<DecisionPhase> = new Set([
+  'eliminating',
+  'redistributing',
+  'committing',
+]);
+
 /**
  * Zone resolution is DOM hit-test only (AD-7).
  * Cursor position written here; cursor mode written by DomView (AD-10).
+ * Touch skips PREVIEW_SET (AD-19). Re-sync after geometry/lock settle (AD-17).
  */
 export class PointerAdapter {
   private readonly surface: Surface;
@@ -24,6 +35,12 @@ export class PointerAdapter {
   private attached = false;
   private lastPreviewKey = '';
   private host: HTMLElement | null = null;
+  private lastClientX = 0;
+  private lastClientY = 0;
+  private hasClient = false;
+  private lastPointerType: string | null = null;
+  private lastPhase: DecisionPhase = 'idle';
+  private resyncQueued = false;
 
   constructor(options: PointerAdapterOptions) {
     this.surface = options.surface;
@@ -31,6 +48,11 @@ export class PointerAdapter {
     this.getCursor = options.getCursor;
 
     this.onMove = (event: PointerEvent) => {
+      this.lastPointerType = event.pointerType;
+      this.lastClientX = event.clientX;
+      this.lastClientY = event.clientY;
+      this.hasClient = true;
+
       if (event.pointerType === 'touch') {
         this.hideCursor();
         return;
@@ -73,6 +95,57 @@ export class PointerAdapter {
     this.attached = false;
     this.lastPreviewKey = '';
     this.host = null;
+    this.hasClient = false;
+    this.resyncQueued = false;
+  }
+
+  /**
+   * Observe snapshot edges (lock exit). Must not gate dispatch on phase (AD-3).
+   * Call from composition root subscription — never dispatch sync from paint.
+   */
+  observeSnapshot(snapshot: DecisionNodeSnapshot): void {
+    const wasLocked = LOCKED.has(this.lastPhase);
+    const nowLocked = LOCKED.has(snapshot.phase);
+    this.lastPhase = snapshot.phase;
+    if (wasLocked && !nowLocked) {
+      this.scheduleResync();
+    }
+  }
+
+  /** After host resize / geometry relayout (AD-17). */
+  onGeometryChanged(): void {
+    this.scheduleResync();
+  }
+
+  private scheduleResync(): void {
+    if (this.resyncQueued) return;
+    this.resyncQueued = true;
+    queueMicrotask(() => {
+      this.resyncQueued = false;
+      this.resyncPreview();
+    });
+  }
+
+  private resyncPreview(): void {
+    if (!this.hasClient || !this.attached) return;
+    if (this.lastPointerType === 'touch') {
+      this.hideCursor();
+      return;
+    }
+
+    this.showAndPlaceCursor(this.lastClientX, this.lastClientY);
+
+    const el = document.elementFromPoint(this.lastClientX, this.lastClientY);
+    if (!el || (this.host && !this.host.contains(el))) {
+      this.emitPreview(null, 'neutral');
+      return;
+    }
+    const hit = resolveZone(el);
+    if (!hit) {
+      this.emitPreview(null, 'neutral');
+      return;
+    }
+    this.emitPreview(hit.shardId, hit.mode);
   }
 
   private showAndPlaceCursor(clientX: number, clientY: number): void {
