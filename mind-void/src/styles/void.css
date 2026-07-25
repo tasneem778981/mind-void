@@ -101,12 +101,40 @@ body {
   stroke: var(--mv-shard-edge);
   stroke-width: 1px;
   stroke-linejoin: miter;
+  transition:
+    fill var(--mv-profile-preview-in, var(--mv-motion-preview-in))
+      var(--mv-profile-ease-calm, var(--mv-motion-ease-calm)),
+    stroke var(--mv-profile-preview-in, var(--mv-motion-preview-in))
+      var(--mv-profile-ease-calm, var(--mv-motion-ease-calm)),
+    filter var(--mv-profile-preview-in, var(--mv-motion-preview-in))
+      var(--mv-profile-ease-calm, var(--mv-motion-ease-calm));
 }
 
 .mv-shard-rim {
   fill: transparent;
-  stroke: none;
+  stroke: transparent;
+  stroke-width: 1px;
   pointer-events: visiblePainted;
+  transition:
+    stroke var(--mv-profile-preview-in, var(--mv-motion-preview-in))
+      var(--mv-profile-ease-calm, var(--mv-motion-ease-calm));
+}
+
+.mv-shard[data-preview='solo'] .mv-shard-body {
+  fill: var(--mv-shard-face-solo);
+  filter: drop-shadow(0 0 24px var(--mv-charge-glow));
+  animation: none;
+}
+
+.mv-shard[data-preview='mute'] .mv-shard-body {
+  fill: var(--mv-shard-face-mute);
+  stroke: var(--mv-repulse-edge);
+  filter: none;
+  animation: none;
+}
+
+.mv-shard[data-preview='mute'] .mv-shard-rim {
+  stroke: var(--mv-repulse-edge);
 }
 
 .mv-seam {

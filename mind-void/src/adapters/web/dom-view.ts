@@ -78,6 +78,13 @@ export class DomView {
       group.classList.add('mv-shard');
       group.style.transform = `translate(${shard.placeX}px, ${shard.placeY}px)`;
 
+      if (
+        snapshot.previewShardId === shard.id &&
+        (snapshot.previewMode === 'solo' || snapshot.previewMode === 'mute')
+      ) {
+        group.dataset.preview = snapshot.previewMode;
+      }
+
       const body = document.createElementNS(SVG_NS, 'path');
       body.setAttribute('d', pointsToSvgPath(shard.body));
       body.classList.add('mv-shard-body');
@@ -93,6 +100,7 @@ export class DomView {
       rim.setAttribute('data-zone', 'rim');
       rim.setAttribute('aria-hidden', 'true');
 
+      // Rim above body so Mute wins on overlap (AD-7)
       group.append(body, rim);
       node.append(group);
     }

@@ -12,6 +12,7 @@ import { DecisionNodeFSM } from '../core/decision-node-fsm';
 import { VoidCanvas } from '../adapters/web/void-canvas';
 import { DomView } from '../adapters/web/dom-view';
 import { TimeoutClock } from '../adapters/web/raf-clock';
+import { PointerAdapter } from '../adapters/web/pointer-adapter';
 import '../styles/tokens.generated.css';
 
 export type MountOpts = {
@@ -155,6 +156,14 @@ export function mountMindVoid(
   resizeObserver.observe(shell);
   layout();
 
+  const pointer = new PointerAdapter({
+    surface,
+    dispatch: (intent) => {
+      fsm.dispatch(intent);
+    },
+  });
+  pointer.attach();
+
   let alive = true;
   const listeners: TrackedListener[] = [];
   let rafId: number | null = null;
@@ -170,6 +179,7 @@ export function mountMindVoid(
     if (!alive) return;
     alive = false;
 
+    pointer.detach();
     resizeObserver.disconnect();
     unsubscribe();
     view.clear();

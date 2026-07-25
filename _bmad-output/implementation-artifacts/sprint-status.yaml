@@ -58,7 +58,7 @@ development_status:
 
   epic-2: in-progress
   2-1-fsm-core-idle-hovering-and-device-neutral-intents: done
-  2-2-pointer-solo-and-mute-zone-previews: backlog
+  2-2-pointer-solo-and-mute-zone-previews: done
   2-3-custom-attract-and-repulse-cursor: backlog
   2-4-keyboard-floor-and-focus-ring: backlog
   2-5-touch-degradation-and-preview-re-sync: backlog
