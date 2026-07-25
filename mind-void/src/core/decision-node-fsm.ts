@@ -34,8 +34,10 @@ export class DecisionNodeFSM {
   private previewShardId: string | null = null;
   private previewMode: PreviewMode = 'neutral';
   private pressedShardId: string | null = null;
+  private eliminatingShardId: string | null = null;
   private holdHandle: ClockHandle | null = null;
   private commitHandles: ClockHandle[] = [];
+  private eliminateHandles: ClockHandle[] = [];
   private readonly listeners = new Set<SnapshotListener>();
 
   constructor(options: DecisionNodeFSMOptions) {
@@ -60,6 +62,7 @@ export class DecisionNodeFSM {
   dispose(): void {
     this.clearHoldTimer();
     this.clearCommitTimers();
+    this.clearEliminateTimers();
     this.clock.invalidate();
     this.listeners.clear();
   }
@@ -76,6 +79,7 @@ export class DecisionNodeFSM {
       previewShardId: this.previewShardId,
       previewMode: this.previewMode,
       pressedShardId: this.pressedShardId,
+      eliminatingShardId: this.eliminatingShardId,
     };
   }
 
@@ -101,7 +105,7 @@ export class DecisionNodeFSM {
         this.onCancel();
         break;
       case 'ELIMINATE':
-        // Story 3.2
+        this.onEliminate(intent.shardId);
         break;
       default: {
         const _exhaustive: never = intent;
@@ -191,6 +195,61 @@ export class DecisionNodeFSM {
     this.cancelHold(false);
   }
 
+  private onEliminate(shardId: string): void {
+    if (this.phase !== 'idle' && this.phase !== 'hovering') return;
+    // AD-12: floor at two shards — Commit is the only exit.
+    if (this.shardIds.length <= 2) return;
+    if (!this.shardIds.includes(shardId)) return;
+
+    this.clearHoldTimer();
+    this.pressedShardId = null;
+    this.eliminatingShardId = shardId;
+    this.phase = 'eliminating';
+    this.emit();
+
+    const dissolve = this.motion.eliminateDissolve;
+    const h1 = this.clock.after(dissolve, () => {
+      this.finishEliminate(shardId);
+    });
+    this.eliminateHandles.push(h1);
+  }
+
+  private finishEliminate(removedId: string): void {
+    const idx = this.shardIds.indexOf(removedId);
+    if (idx < 0) return;
+
+    this.shardIds = this.shardIds.filter((id) => id !== removedId);
+
+    if (this.focusedShardId === removedId) {
+      const nextIdx = Math.min(idx, this.shardIds.length - 1);
+      this.focusedShardId = this.shardIds[nextIdx] ?? null;
+    }
+    if (this.previewShardId === removedId) {
+      this.previewShardId = null;
+      this.previewMode = 'neutral';
+    }
+
+    this.eliminatingShardId = null;
+    this.phase = 'redistributing';
+    this.emit();
+
+    const redistribute = this.motion.redistribute;
+    const finish = (): void => {
+      this.phase =
+        this.previewMode !== 'neutral' && this.previewShardId !== null
+          ? 'hovering'
+          : 'idle';
+      this.emit();
+    };
+
+    if (redistribute <= 0) {
+      finish();
+      return;
+    }
+    const h2 = this.clock.after(redistribute, finish);
+    this.eliminateHandles.push(h2);
+  }
+
   private cancelHold(previewAlreadyUpdating: boolean): void {
     this.clearHoldTimer();
     this.pressedShardId = null;
@@ -247,6 +306,11 @@ export class DecisionNodeFSM {
   private clearCommitTimers(): void {
     for (const h of this.commitHandles) this.clock.cancel(h);
     this.commitHandles = [];
+  }
+
+  private clearEliminateTimers(): void {
+    for (const h of this.eliminateHandles) this.clock.cancel(h);
+    this.eliminateHandles = [];
   }
 
   private emit(): void {

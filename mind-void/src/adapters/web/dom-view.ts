@@ -124,15 +124,33 @@ export class DomView {
         group.dataset.committing = '1';
         group.style.setProperty('--mv-place-x', `${shard.placeX}px`);
         group.style.setProperty('--mv-place-y', `${shard.placeY}px`);
+      } else if (snapshot.phase === 'redistributing') {
+        group.style.transform = `translate(${shard.placeX}px, ${shard.placeY}px)`;
+        group.style.transition = `transform var(--mv-profile-redistribute, var(--mv-motion-redistribute)) var(--mv-profile-ease-calm, var(--mv-motion-ease-calm))`;
       } else {
         group.style.transform = `translate(${shard.placeX}px, ${shard.placeY}px)`;
+      }
+
+      if (snapshot.eliminatingShardId === shard.id) {
+        group.dataset.eliminating = '1';
+        group.style.setProperty('--mv-base-x', `${shard.placeX}px`);
+        group.style.setProperty('--mv-base-y', `${shard.placeY}px`);
+        group.style.setProperty(
+          '--mv-out-x',
+          String(shard.outwardNormal.x * 36),
+        );
+        group.style.setProperty(
+          '--mv-out-y',
+          String(shard.outwardNormal.y * 36),
+        );
       }
 
       if (
         snapshot.previewShardId === shard.id &&
         (snapshot.previewMode === 'solo' || snapshot.previewMode === 'mute') &&
         snapshot.phase !== 'pressing' &&
-        snapshot.phase !== 'committing'
+        snapshot.phase !== 'committing' &&
+        snapshot.phase !== 'eliminating'
       ) {
         group.dataset.preview = snapshot.previewMode;
       }

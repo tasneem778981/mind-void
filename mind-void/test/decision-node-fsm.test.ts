@@ -171,3 +171,46 @@ describe('DecisionNodeFSM hold → commit → solid (Story 3.1)', () => {
     expect(fsm.snapshot().phase).toBe('idle');
   });
 });
+
+describe('DecisionNodeFSM eliminate → redistribute (Story 3.2)', () => {
+  it('eliminates a shard then redistributes survivors', () => {
+    const { fsm, clock } = createFsm();
+    fsm.dispatch({ type: 'ELIMINATE', shardId: 'shard-b' });
+    expect(fsm.snapshot().phase).toBe('eliminating');
+    expect(fsm.snapshot().eliminatingShardId).toBe('shard-b');
+    expect(fsm.snapshot().shardIds).toEqual(['shard-a', 'shard-b', 'shard-c']);
+
+    clock.advance(motionFull.eliminateDissolve);
+    expect(fsm.snapshot().phase).toBe('redistributing');
+    expect(fsm.snapshot().shardIds).toEqual(['shard-a', 'shard-c']);
+    expect(fsm.snapshot().eliminatingShardId).toBeNull();
+
+    clock.advance(motionFull.redistribute);
+    expect(fsm.snapshot().phase).toBe('idle');
+  });
+
+  it('refuses ELIMINATE at two shards (AD-12)', () => {
+    const { fsm } = createFsm(['shard-a', 'shard-b']);
+    fsm.dispatch({ type: 'ELIMINATE', shardId: 'shard-a' });
+    expect(fsm.snapshot().phase).toBe('idle');
+    expect(fsm.snapshot().shardIds).toEqual(['shard-a', 'shard-b']);
+  });
+
+  it('moves focus to survivor at same index when eliminated held focus (AD-13)', () => {
+    const { fsm, clock } = createFsm();
+    fsm.dispatch({ type: 'FOCUS_SET', shardId: 'shard-b' });
+    fsm.dispatch({ type: 'ELIMINATE', shardId: 'shard-b' });
+    clock.advance(motionFull.eliminateDissolve);
+    expect(fsm.snapshot().focusedShardId).toBe('shard-c');
+    clock.advance(motionFull.redistribute);
+    expect(fsm.snapshot().focusedShardId).toBe('shard-c');
+  });
+
+  it('refuses ELIMINATE while pressing', () => {
+    const { fsm } = createFsm();
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    fsm.dispatch({ type: 'ELIMINATE', shardId: 'shard-b' });
+    expect(fsm.snapshot().phase).toBe('pressing');
+    expect(fsm.snapshot().shardIds).toHaveLength(3);
+  });
+});

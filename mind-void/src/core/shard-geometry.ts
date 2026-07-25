@@ -122,10 +122,16 @@ export function computeShardGeometry(
   nodeRadius: number,
   nodeCenter: Point,
   seamConfig: SeamConfig = DEFAULT_SEAM_CONFIG,
+  shardIds?: readonly string[],
 ): ShardGeometryResult {
   assertValidShardCount(shardCount);
   if (!(nodeRadius > 0)) {
     throw new Error(`nodeRadius must be positive, got ${String(nodeRadius)}`);
+  }
+  if (shardIds && shardIds.length !== shardCount) {
+    throw new Error(
+      `shardIds length ${shardIds.length} does not match shardCount ${shardCount}`,
+    );
   }
 
   const { gapPx, rimBandPx } = seamConfig;
@@ -144,7 +150,7 @@ export function computeShardGeometry(
       const offset = scale(normal, sign * gapPx);
       const outward = normalize(offset);
       shards.push({
-        id: shardId(i),
+        id: shardIds?.[i] ?? shardId(i),
         index: i,
         body,
         rim,
@@ -169,7 +175,7 @@ export function computeShardGeometry(
       const body = wedgeBody(nodeRadius, a0, a1);
       const rim = wedgeRim(nodeRadius, rimBandPx, a0, a1);
       shards.push({
-        id: shardId(i),
+        id: shardIds?.[i] ?? shardId(i),
         index: i,
         body,
         rim,

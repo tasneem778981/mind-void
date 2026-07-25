@@ -125,6 +125,7 @@ export function mountMindVoid(
   });
 
   let lastGeometry: ShardGeometryResult | null = null;
+  let lastShardKey = '';
 
   const paint = (): void => {
     if (!lastGeometry) return;
@@ -147,12 +148,10 @@ export function mountMindVoid(
     getFocusedShardId: () => fsm.snapshot().focusedShardId,
   });
 
-  const unsubscribe = fsm.subscribe((snapshot) => {
-    paint();
-    pointer.observeSnapshot(snapshot);
-  });
-
-  const layout = (): void => {
+  const recomputeGeometry = (
+    ids: readonly string[],
+    notifyPointer: boolean,
+  ): void => {
     const w = surface.width;
     const h = surface.height;
     if (w < 2 || h < 2) return;
@@ -160,13 +159,29 @@ export function mountMindVoid(
     const nodeRadius = deriveNodeRadius(w, h);
     const nodeCenter = { x: w / 2, y: h / 2 };
     lastGeometry = computeShardGeometry(
-      shardCount,
+      ids.length,
       nodeRadius,
       nodeCenter,
       DEFAULT_SEAM_CONFIG,
+      ids,
     );
+    lastShardKey = ids.join(',');
     paint();
-    pointer.onGeometryChanged();
+    if (notifyPointer) pointer.onGeometryChanged();
+  };
+
+  const unsubscribe = fsm.subscribe((snapshot) => {
+    const key = snapshot.shardIds.join(',');
+    if (key !== lastShardKey || !lastGeometry) {
+      recomputeGeometry(snapshot.shardIds, true);
+    } else {
+      paint();
+    }
+    pointer.observeSnapshot(snapshot);
+  });
+
+  const layout = (): void => {
+    recomputeGeometry(fsm.snapshot().shardIds, true);
   };
 
   const resizeObserver = new ResizeObserver(() => {

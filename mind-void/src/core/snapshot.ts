@@ -9,7 +9,7 @@ export type DecisionPhase =
   | 'committing'
   | 'solid';
 
-/** Readonly snapshot — DomView input only (AD-2). Expanded in Epic 2+. */
+/** Readonly snapshot — DomView input only (AD-2). */
 export type DecisionNodeSnapshot = {
   readonly phase: DecisionPhase;
   readonly shardIds: readonly string[];
@@ -17,6 +17,8 @@ export type DecisionNodeSnapshot = {
   readonly previewShardId: string | null;
   readonly previewMode: PreviewMode;
   readonly pressedShardId: string | null;
+  /** Set during `eliminating` so DomView can cut-flash the victim (AD-9). */
+  readonly eliminatingShardId: string | null;
 };
 
 export function createIdleSnapshot(
@@ -29,5 +31,6 @@ export function createIdleSnapshot(
     previewShardId: null,
     previewMode: 'neutral',
     pressedShardId: null,
+    eliminatingShardId: null,
   };
 }
