@@ -1,8 +1,15 @@
-import { assertValidShardCount } from '../core/shard-count';
+import { assertValidShardCount, MIN_SHARD_COUNT } from '../core/shard-count';
 import { resolveMotionProfile } from '../core/resolve-motion-profile';
 import type { MotionProfile } from '../core/motion.generated';
 import type { Surface } from '../core/ports';
+import {
+  computeShardGeometry,
+  DEFAULT_SEAM_CONFIG,
+  deriveNodeRadius,
+} from '../core/shard-geometry';
+import { createIdleSnapshot } from '../core/snapshot';
 import { VoidCanvas } from '../adapters/web/void-canvas';
+import { DomView } from '../adapters/web/dom-view';
 import '../styles/tokens.generated.css';
 
 /**
@@ -26,6 +33,8 @@ type TrackedListener = {
   handler: EventListener;
   options?: boolean | AddEventListenerOptions;
 };
+
+const DEFAULT_SHARD_COUNT = 3;
 
 function readPrefersReducedMotion(): boolean {
   if (typeof matchMedia !== 'function') return false;
@@ -66,6 +75,14 @@ function applyMotionProfileCssVars(
   );
 }
 
+function resolveShardCount(opts: MountOpts): number {
+  if (opts.shardCount !== undefined) {
+    assertValidShardCount(opts.shardCount);
+    return opts.shardCount;
+  }
+  return DEFAULT_SHARD_COUNT;
+}
+
 /**
  * Sole composition root (AD-1, AD-14). Constructs collaborators here only —
  * no import-time singletons.
@@ -75,9 +92,9 @@ export function mountMindVoid(
   opts?: MountOpts | null,
 ): UnmountHandle {
   const options = opts ?? {};
-
-  if (options.shardCount !== undefined) {
-    assertValidShardCount(options.shardCount);
+  const shardCount = resolveShardCount(options);
+  if (shardCount < MIN_SHARD_COUNT) {
+    assertValidShardCount(shardCount);
   }
 
   const motionProfile = resolveMotionProfile(
@@ -96,6 +113,31 @@ export function mountMindVoid(
   root.appendChild(shell);
 
   const surface: Surface = new VoidCanvas(shell);
+  const view = new DomView(surface);
+
+  const layout = (): void => {
+    const w = surface.width;
+    const h = surface.height;
+    if (w < 2 || h < 2) return;
+
+    const nodeRadius = deriveNodeRadius(w, h);
+    const nodeCenter = { x: w / 2, y: h / 2 };
+    const geometry = computeShardGeometry(
+      shardCount,
+      nodeRadius,
+      nodeCenter,
+      DEFAULT_SEAM_CONFIG,
+    );
+    const snapshot = createIdleSnapshot(geometry.shards.map((s) => s.id));
+    view.render(snapshot, geometry, motionProfile);
+  };
+
+  const resizeObserver = new ResizeObserver(() => {
+    surface.invalidateClientRect();
+    layout();
+  });
+  resizeObserver.observe(shell);
+  layout();
 
   let alive = true;
   const listeners: TrackedListener[] = [];
@@ -114,6 +156,9 @@ export function mountMindVoid(
   return () => {
     if (!alive) return;
     alive = false;
+
+    resizeObserver.disconnect();
+    view.clear();
 
     for (const { target, type, handler, options: listenerOpts } of listeners) {
       target.removeEventListener(type, handler, listenerOpts);

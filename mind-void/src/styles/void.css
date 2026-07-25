@@ -60,3 +60,51 @@ body {
   z-index: 3;
   pointer-events: none;
 }
+
+.mv-shard {
+  transform-box: fill-box;
+  transform-origin: 0 0;
+}
+
+.mv-shard-body {
+  fill: var(--mv-shard-face);
+  stroke: var(--mv-shard-edge);
+  stroke-width: 1px;
+  stroke-linejoin: miter;
+}
+
+.mv-shard-rim {
+  fill: transparent;
+  stroke: none;
+  pointer-events: visiblePainted;
+}
+
+.mv-seam {
+  fill: none;
+  stroke: var(--mv-seam);
+  stroke-width: 2px;
+  stroke-linecap: square;
+  pointer-events: none;
+}
+
+/* Opacity/fill pulse toward charge-pulse — never scale (UX-DR5) */
+.mv-shell[data-idle-pulse='1'] .mv-shard-body {
+  animation: mv-idle-pulse var(--mv-profile-pulse-idle, var(--mv-motion-pulse-idle))
+    var(--mv-profile-ease-calm, var(--mv-motion-ease-calm)) infinite;
+}
+
+.mv-shell[data-idle-pulse='0'] .mv-shard-body {
+  animation: none;
+}
+
+@keyframes mv-idle-pulse {
+  0%,
+  100% {
+    fill: var(--mv-shard-face);
+    fill-opacity: 1;
+  }
+  50% {
+    fill: var(--mv-charge-pulse);
+    fill-opacity: 0.92;
+  }
+}
