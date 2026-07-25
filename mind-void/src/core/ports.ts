@@ -2,10 +2,6 @@
 
 export type LocalPoint = { x: number; y: number };
 
-/**
- * Layer handles are opaque to core consumers — typed here so Surface is complete.
- * Runtime elements are created only in the web adapter ring.
- */
 export type SurfaceLayers = {
   vignette: HTMLElement;
   shards: SVGSVGElement;
@@ -19,20 +15,33 @@ export interface Surface {
   readonly height: number;
   readonly dpr: number;
   clientToLocal(clientX: number, clientY: number): LocalPoint;
-  /** Force rect refresh at gesture start (AD-6). */
   invalidateClientRect(): void;
   dispose(): void;
 }
 
-/** Placeholders for later stories. */
+export type ClockHandle = number;
+
+/**
+ * Injected time source (AD-5). Core never calls setTimeout / rAF.
+ * `after` schedules; `invalidate` drops all pending (unmount).
+ */
 export interface Clock {
-  // Epic 3
+  now(): number;
+  after(delayMs: number, callback: () => void): ClockHandle;
+  cancel(handle: ClockHandle): void;
+  invalidate(): void;
 }
 
+/** AudioPort surface filled in Story 3.4 (AD-11). */
 export interface AudioPort {
-  // Story 3.4
+  bedStart(): void;
+  bedStopRelease(): void;
+  preview(mode: 'solo' | 'mute' | 'neutral', shardIndex: number): void;
+  eliminateCut(): void;
+  commitChord(): void;
 }
 
+/** EffectBus / FxSink — Story 3.5. */
 export interface FxSink {
-  // Story 3.5
+  // placeholder
 }

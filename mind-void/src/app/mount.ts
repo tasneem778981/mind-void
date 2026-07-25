@@ -6,16 +6,14 @@ import {
   computeShardGeometry,
   DEFAULT_SEAM_CONFIG,
   deriveNodeRadius,
+  type ShardGeometryResult,
 } from '../core/shard-geometry';
-import { createIdleSnapshot } from '../core/snapshot';
+import { DecisionNodeFSM } from '../core/decision-node-fsm';
 import { VoidCanvas } from '../adapters/web/void-canvas';
 import { DomView } from '../adapters/web/dom-view';
+import { TimeoutClock } from '../adapters/web/raf-clock';
 import '../styles/tokens.generated.css';
 
-/**
- * Exact public configuration surface (AD-14).
- * `nodeRadius` is never an option — derived from surface size later.
- */
 export type MountOpts = {
   shards?: unknown;
   shardCount?: number;
@@ -24,7 +22,6 @@ export type MountOpts = {
   seed?: number;
 };
 
-/** Detach listeners, cancel rAF, clear FX, stop audio, invalidate clock. */
 export type UnmountHandle = () => void;
 
 type TrackedListener = {
@@ -83,10 +80,13 @@ function resolveShardCount(opts: MountOpts): number {
   return DEFAULT_SHARD_COUNT;
 }
 
-/**
- * Sole composition root (AD-1, AD-14). Constructs collaborators here only —
- * no import-time singletons.
- */
+function shardIdsForCount(count: number): string[] {
+  return Array.from(
+    { length: count },
+    (_, i) => `shard-${String.fromCharCode(97 + i)}`,
+  );
+}
+
 export function mountMindVoid(
   root: HTMLElement,
   opts?: MountOpts | null,
@@ -114,6 +114,23 @@ export function mountMindVoid(
 
   const surface: Surface = new VoidCanvas(shell);
   const view = new DomView(surface);
+  const clock = new TimeoutClock();
+  const fsm = new DecisionNodeFSM({
+    shardIds: shardIdsForCount(shardCount),
+    clock,
+    motion: motionProfile,
+  });
+
+  let lastGeometry: ShardGeometryResult | null = null;
+
+  const paint = (): void => {
+    if (!lastGeometry) return;
+    view.render(fsm.snapshot(), lastGeometry, motionProfile);
+  };
+
+  const unsubscribe = fsm.subscribe(() => {
+    paint();
+  });
 
   const layout = (): void => {
     const w = surface.width;
@@ -122,14 +139,13 @@ export function mountMindVoid(
 
     const nodeRadius = deriveNodeRadius(w, h);
     const nodeCenter = { x: w / 2, y: h / 2 };
-    const geometry = computeShardGeometry(
+    lastGeometry = computeShardGeometry(
       shardCount,
       nodeRadius,
       nodeCenter,
       DEFAULT_SEAM_CONFIG,
     );
-    const snapshot = createIdleSnapshot(geometry.shards.map((s) => s.id));
-    view.render(snapshot, geometry, motionProfile);
+    paint();
   };
 
   const resizeObserver = new ResizeObserver(() => {
@@ -149,16 +165,15 @@ export function mountMindVoid(
   const stopAudio = (): void => {
     /* AudioPort — Epic 3 */
   };
-  const invalidateClock = (): void => {
-    /* Clock — Epic 3 */
-  };
 
   return () => {
     if (!alive) return;
     alive = false;
 
     resizeObserver.disconnect();
+    unsubscribe();
     view.clear();
+    fsm.dispose();
 
     for (const { target, type, handler, options: listenerOpts } of listeners) {
       target.removeEventListener(type, handler, listenerOpts);
@@ -172,7 +187,7 @@ export function mountMindVoid(
 
     clearFx();
     stopAudio();
-    invalidateClock();
+    clock.invalidate();
     surface.dispose();
     shell.remove();
   };
