@@ -6,24 +6,32 @@ export type KeyboardDispatch = (intent: Intent) => void;
 export type KeyboardAdapterOptions = {
   surface: Surface;
   dispatch: KeyboardDispatch;
+  /** Current focused shard from FSM snapshot (adapter must not gate on phase). */
+  getFocusedShardId: () => string | null;
 };
 
 /**
  * Keyboard floor (AD-8, AD-15, AD-25).
- * Story 2.4: FOCUS_SET from focusin; modifiers ignored (Shift+Tab uses native order).
- * Hold / Eliminate keys wire in Story 3.3.
+ * Tab → native + focusin → FOCUS_SET.
+ * Enter/Space hold → HOLD_*; Delete/Backspace → ELIMINATE.
  */
 export class KeyboardAdapter {
   private readonly surface: Surface;
   private readonly dispatch: KeyboardDispatch;
+  private readonly getFocusedShardId: () => string | null;
   private readonly onFocusIn: (event: FocusEvent) => void;
   private readonly onKeyDown: (event: KeyboardEvent) => void;
+  private readonly onKeyUp: (event: KeyboardEvent) => void;
+  private readonly onBlur: () => void;
+  private readonly onVisibility: () => void;
   private attached = false;
   private host: HTMLElement | null = null;
+  private holdKey: string | null = null;
 
   constructor(options: KeyboardAdapterOptions) {
     this.surface = options.surface;
     this.dispatch = options.dispatch;
+    this.getFocusedShardId = options.getFocusedShardId;
 
     this.onFocusIn = (event: FocusEvent) => {
       const target = event.target;
@@ -32,7 +40,6 @@ export class KeyboardAdapter {
       if (!body || !this.host?.contains(body)) return;
       const shardId = body.getAttribute('data-shard-id');
       if (!shardId) return;
-      // AD-24: never dispatch synchronously from a snapshot-driven focus() path.
       queueMicrotask(() => {
         this.dispatch({ type: 'FOCUS_SET', shardId });
       });
@@ -40,9 +47,43 @@ export class KeyboardAdapter {
 
     this.onKeyDown = (event: KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey) return;
-      // Shift allowed only with Tab (native reverse). Other Shift+key ignored (AD-15).
       if (event.shiftKey && event.key !== 'Tab') return;
-      // Enter / Space / Delete → Story 3.3
+      if (event.repeat) return;
+
+      const key = event.key;
+      if (key === 'Enter' || key === ' ') {
+        if (key === ' ') event.preventDefault();
+        const shardId = this.getFocusedShardId();
+        if (!shardId) return;
+        this.holdKey = key;
+        this.dispatch({ type: 'HOLD_START', shardId });
+        return;
+      }
+
+      if (key === 'Delete' || key === 'Backspace') {
+        event.preventDefault();
+        const shardId = this.getFocusedShardId();
+        if (!shardId) return;
+        this.dispatch({ type: 'ELIMINATE', shardId });
+      }
+    };
+
+    this.onKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== this.holdKey) return;
+      this.holdKey = null;
+      this.dispatch({ type: 'HOLD_END' });
+    };
+
+    this.onBlur = () => {
+      this.holdKey = null;
+      this.dispatch({ type: 'CANCEL' });
+    };
+
+    this.onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        this.holdKey = null;
+        this.dispatch({ type: 'CANCEL' });
+      }
     };
   }
 
@@ -52,6 +93,9 @@ export class KeyboardAdapter {
     if (!this.host) return;
     this.host.addEventListener('focusin', this.onFocusIn);
     this.host.addEventListener('keydown', this.onKeyDown);
+    this.host.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
+    document.addEventListener('visibilitychange', this.onVisibility);
     this.attached = true;
   }
 
@@ -59,7 +103,11 @@ export class KeyboardAdapter {
     if (!this.attached || !this.host) return;
     this.host.removeEventListener('focusin', this.onFocusIn);
     this.host.removeEventListener('keydown', this.onKeyDown);
+    this.host.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('visibilitychange', this.onVisibility);
     this.attached = false;
     this.host = null;
+    this.holdKey = null;
   }
 }

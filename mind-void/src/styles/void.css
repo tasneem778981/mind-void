@@ -155,6 +155,116 @@ body {
   pointer-events: none;
 }
 
+.mv-seams[data-flash='1'] .mv-seam {
+  stroke: var(--mv-charge-glow);
+  animation: mv-seam-flash var(--mv-profile-seam-flash, var(--mv-motion-seam-flash))
+    var(--mv-profile-ease-calm, var(--mv-motion-ease-calm)) both;
+  animation-delay: var(--mv-profile-fuse-magnetize, var(--mv-motion-fuse-magnetize));
+}
+
+.mv-hold-progress {
+  fill: none;
+  stroke: var(--mv-charge-glow);
+  stroke-width: 2.5px;
+  stroke-linejoin: miter;
+  pointer-events: none;
+  transition: stroke-dashoffset
+    var(--mv-profile-hold-commit, var(--mv-motion-hold-commit)) linear;
+}
+
+.mv-shell:not([data-phase='pressing']) .mv-hold-progress {
+  transition-duration: var(--mv-profile-preview-out, var(--mv-motion-preview-out));
+}
+
+.mv-shard[data-pressed='1'] .mv-shard-body {
+  fill: var(--mv-shard-face-solo);
+  filter: drop-shadow(0 0 24px var(--mv-charge-glow));
+  animation: none;
+}
+
+.mv-shard[data-committing='1'] {
+  animation: mv-magnetize var(--mv-profile-fuse-magnetize, var(--mv-motion-fuse-magnetize))
+    var(--mv-profile-ease-magnetize, var(--mv-motion-ease-magnetize)) both;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.mv-solid-charge {
+  fill: var(--mv-solid-face);
+  stroke: var(--mv-solid-halo);
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 28px var(--mv-solid-halo));
+  animation: mv-solid-settle var(--mv-profile-solid-settle, var(--mv-motion-solid-settle))
+    var(--mv-profile-ease-magnetize, var(--mv-motion-ease-magnetize)) both;
+}
+
+.mv-solid-halo {
+  fill: none;
+  stroke: var(--mv-solid-halo);
+  stroke-width: 1.5px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.mv-copy-thesis[data-lifecycle='hold'] {
+  color: var(--mv-ink-primary);
+  font-family: var(--mv-type-display-font-family);
+  font-size: var(--mv-type-display-font-size);
+  font-weight: var(--mv-type-display-font-weight);
+  letter-spacing: var(--mv-type-display-letter-spacing);
+  animation: mv-thesis-lifecycle var(--mv-profile-thesis-hold, 4000ms) ease forwards;
+}
+
+@keyframes mv-seam-flash {
+  0% {
+    stroke: var(--mv-seam);
+  }
+  40% {
+    stroke: var(--mv-charge-glow);
+  }
+  100% {
+    stroke: transparent;
+  }
+}
+
+@keyframes mv-magnetize {
+  0% {
+    transform: translate(var(--mv-place-x, 0), var(--mv-place-y, 0)) scale(1);
+  }
+  70% {
+    transform: translate(0, 0) scale(1.06);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes mv-solid-settle {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes mv-thesis-lifecycle {
+  0%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Opacity/fill pulse toward charge-pulse — never scale (UX-DR5) */
 .mv-shell[data-idle-pulse='1'] .mv-shard-body {
   animation: mv-idle-pulse var(--mv-profile-pulse-idle, var(--mv-motion-pulse-idle))

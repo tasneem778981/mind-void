@@ -1,6 +1,6 @@
 import type { Intent } from './intents';
 import type { MotionProfile } from './motion.generated';
-import type { Clock } from './ports';
+import type { Clock, ClockHandle } from './ports';
 import type {
   DecisionNodeSnapshot,
   DecisionPhase,
@@ -22,9 +22,8 @@ const LOCKED: ReadonlySet<DecisionPhase> = new Set([
 ]);
 
 /**
- * Pure interaction owner (AD-1, AD-2, AD-3).
- * Story 2.1: idle ↔ hovering + focus/preview field independence.
- * Hold / eliminate / commit land in later stories; intents are accepted and may no-op.
+ * Pure interaction owner (AD-1, AD-2, AD-3, AD-5).
+ * Hold → Commit is Clock-driven; there is no COMMIT intent (AD-4).
  */
 export class DecisionNodeFSM {
   private readonly clock: Clock;
@@ -35,6 +34,8 @@ export class DecisionNodeFSM {
   private previewShardId: string | null = null;
   private previewMode: PreviewMode = 'neutral';
   private pressedShardId: string | null = null;
+  private holdHandle: ClockHandle | null = null;
+  private commitHandles: ClockHandle[] = [];
   private readonly listeners = new Set<SnapshotListener>();
 
   constructor(options: DecisionNodeFSMOptions) {
@@ -56,13 +57,13 @@ export class DecisionNodeFSM {
     };
   }
 
-  /** Drop pending clock work (composition-root unmount). */
   dispose(): void {
+    this.clearHoldTimer();
+    this.clearCommitTimers();
     this.clock.invalidate();
     this.listeners.clear();
   }
 
-  /** Motion profile injected at construction (AD-5). */
   get motionProfile(): MotionProfile {
     return this.motion;
   }
@@ -91,10 +92,16 @@ export class DecisionNodeFSM {
         this.onPreviewSet(intent.shardId, intent.mode);
         break;
       case 'HOLD_START':
+        this.onHoldStart(intent.shardId);
+        break;
       case 'HOLD_END':
-      case 'ELIMINATE':
+        this.onHoldEnd();
+        break;
       case 'CANCEL':
-        // Wired in Epic 3 / Story 2.x resolve paths — accepted, no-op for 2.1.
+        this.onCancel();
+        break;
+      case 'ELIMINATE':
+        // Story 3.2
         break;
       default: {
         const _exhaustive: never = intent;
@@ -111,10 +118,17 @@ export class DecisionNodeFSM {
   }
 
   private onPreviewSet(shardId: string | null, mode: PreviewMode): void {
+    if (this.phase === 'pressing') {
+      // AD-12 tightening: preview of pressed shard ignored (any zone).
+      if (shardId !== null && shardId === this.pressedShardId) return;
+      // Other shard / neutral cancels the hold (FR7).
+      this.cancelHold(/* keepPreviewUpdate */ true);
+      // Fall through to apply the preview change below.
+    }
+
     let nextMode = mode;
     let nextId = shardId;
 
-    // AD-12: at two shards, mute coerces to neutral (rim inert).
     if (this.shardIds.length === 2 && nextMode === 'mute') {
       nextMode = 'neutral';
       nextId = null;
@@ -124,7 +138,7 @@ export class DecisionNodeFSM {
       if (this.phase === 'idle' && this.previewMode === 'neutral') return;
       this.previewShardId = null;
       this.previewMode = 'neutral';
-      if (this.phase === 'hovering' || this.phase === 'idle') {
+      if (this.phase === 'hovering' || this.phase === 'idle' || this.phase === 'pressing') {
         this.phase = 'idle';
       }
       this.emit();
@@ -143,10 +157,96 @@ export class DecisionNodeFSM {
 
     this.previewShardId = nextId;
     this.previewMode = nextMode;
-    if (this.phase === 'idle' || this.phase === 'hovering') {
+    if (
+      this.phase === 'idle' ||
+      this.phase === 'hovering' ||
+      this.phase === 'pressing'
+    ) {
       this.phase = 'hovering';
     }
     this.emit();
+  }
+
+  private onHoldStart(shardId: string): void {
+    if (this.phase !== 'idle' && this.phase !== 'hovering') return;
+    if (!this.shardIds.includes(shardId)) return;
+
+    this.pressedShardId = shardId;
+    this.phase = 'pressing';
+    this.clearHoldTimer();
+    this.holdHandle = this.clock.after(this.motion.holdCommit, () => {
+      this.holdHandle = null;
+      this.beginCommit();
+    });
+    this.emit();
+  }
+
+  private onHoldEnd(): void {
+    if (this.phase !== 'pressing') return;
+    this.cancelHold(false);
+  }
+
+  private onCancel(): void {
+    if (this.phase !== 'pressing') return;
+    this.cancelHold(false);
+  }
+
+  private cancelHold(previewAlreadyUpdating: boolean): void {
+    this.clearHoldTimer();
+    this.pressedShardId = null;
+    if (previewAlreadyUpdating) return;
+
+    if (this.previewMode !== 'neutral' && this.previewShardId !== null) {
+      this.phase = 'hovering';
+    } else {
+      this.phase = 'idle';
+      this.previewShardId = null;
+      this.previewMode = 'neutral';
+    }
+    this.emit();
+  }
+
+  private beginCommit(): void {
+    this.clearHoldTimer();
+    this.pressedShardId = null;
+    this.phase = 'committing';
+    this.emit();
+
+    const { fuseMagnetize, seamFlash, solidSettle } = this.motion;
+
+    // fuse → seam-flash milestone → settle → solid (AD-5 / UX-DR11)
+    const h1 = this.clock.after(fuseMagnetize, () => {
+      // Seam-flash milestone — EffectBus garnishes in Story 3.5; CSS is lossless.
+      const h2 = this.clock.after(seamFlash, () => {
+        const settleDelay = solidSettle;
+        const finish = (): void => {
+          this.phase = 'solid';
+          this.previewShardId = null;
+          this.previewMode = 'neutral';
+          this.emit();
+        };
+        if (settleDelay <= 0) {
+          finish();
+          return;
+        }
+        const h3 = this.clock.after(settleDelay, finish);
+        this.commitHandles.push(h3);
+      });
+      this.commitHandles.push(h2);
+    });
+    this.commitHandles.push(h1);
+  }
+
+  private clearHoldTimer(): void {
+    if (this.holdHandle !== null) {
+      this.clock.cancel(this.holdHandle);
+      this.holdHandle = null;
+    }
+  }
+
+  private clearCommitTimers(): void {
+    for (const h of this.commitHandles) this.clock.cancel(h);
+    this.commitHandles = [];
   }
 
   private emit(): void {

@@ -144,6 +144,7 @@ export function mountMindVoid(
     dispatch: (intent) => {
       fsm.dispatch(intent);
     },
+    getFocusedShardId: () => fsm.snapshot().focusedShardId,
   });
 
   const unsubscribe = fsm.subscribe((snapshot) => {

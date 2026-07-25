@@ -32,16 +32,26 @@ export class FakeClock implements Clock {
     this.queue.length = 0;
   }
 
+  /**
+   * Advance virtual time, flushing nested `after` callbacks scheduled
+   * during the window (hold → fuse → flash → settle chains).
+   */
   advance(ms: number): void {
     if (!this.alive) return;
-    this.time += ms;
-    const due = this.queue
-      .filter((e) => e.due <= this.time)
-      .sort((a, b) => a.due - b.due);
-    for (const entry of due) {
-      const i = this.queue.findIndex((e) => e.id === entry.id);
+    const end = this.time + ms;
+    while (this.alive) {
+      const due = this.queue
+        .filter((e) => e.due <= end)
+        .sort((a, b) => a.due - b.due);
+      const next = due[0];
+      if (!next) {
+        this.time = end;
+        return;
+      }
+      this.time = next.due;
+      const i = this.queue.findIndex((e) => e.id === next.id);
       if (i >= 0) this.queue.splice(i, 1);
-      entry.callback();
+      next.callback();
     }
   }
 }

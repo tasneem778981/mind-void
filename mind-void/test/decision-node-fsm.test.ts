@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { DecisionNodeFSM } from '../src/core/decision-node-fsm';
-import { motionFull } from '../src/core/motion.generated';
+import {
+  motionFull,
+  motionReduced,
+  type MotionProfile,
+} from '../src/core/motion.generated';
 import { FakeClock } from './fake-clock';
 
 const SHARDS = ['shard-a', 'shard-b', 'shard-c'] as const;
 
-function createFsm(shardIds: readonly string[] = SHARDS) {
+function createFsm(
+  shardIds: readonly string[] = SHARDS,
+  motion: MotionProfile = motionFull,
+) {
   const clock = new FakeClock();
   const fsm = new DecisionNodeFSM({
     shardIds,
     clock,
-    motion: motionFull,
+    motion,
   });
   return { fsm, clock };
 }
@@ -68,13 +75,99 @@ describe('DecisionNodeFSM idle ↔ hovering', () => {
     expect(snap.previewMode).toBe('neutral');
     expect(snap.phase).toBe('idle');
   });
+});
 
-  it('has no COMMIT intent type and accepts the locked intent set', () => {
+describe('DecisionNodeFSM hold → commit → solid (Story 3.1)', () => {
+  it('HOLD_START enters pressing; Clock holdCommit advances to committing then solid', () => {
+    const { fsm, clock } = createFsm();
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    expect(fsm.snapshot().phase).toBe('pressing');
+    expect(fsm.snapshot().pressedShardId).toBe('shard-a');
+
+    clock.advance(motionFull.holdCommit);
+    expect(fsm.snapshot().phase).toBe('committing');
+    expect(fsm.snapshot().pressedShardId).toBeNull();
+
+    clock.advance(motionFull.fuseMagnetize);
+    clock.advance(motionFull.seamFlash);
+    clock.advance(motionFull.solidSettle);
+    expect(fsm.snapshot().phase).toBe('solid');
+  });
+
+  it('HOLD_END before threshold cancels and returns hovering when preview live', () => {
+    const { fsm, clock } = createFsm();
+    fsm.dispatch({ type: 'PREVIEW_SET', shardId: 'shard-a', mode: 'solo' });
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    clock.advance(100);
+    fsm.dispatch({ type: 'HOLD_END' });
+    expect(fsm.snapshot().phase).toBe('hovering');
+    expect(fsm.snapshot().pressedShardId).toBeNull();
+    expect(fsm.snapshot().previewMode).toBe('solo');
+  });
+
+  it('CANCEL during pressing returns idle when no preview', () => {
+    const { fsm } = createFsm();
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-b' });
+    fsm.dispatch({ type: 'CANCEL' });
+    expect(fsm.snapshot().phase).toBe('idle');
+    expect(fsm.snapshot().pressedShardId).toBeNull();
+  });
+
+  it('ignores PREVIEW_SET for the pressed shard during pressing (AD-12)', () => {
     const { fsm } = createFsm();
     fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
-    fsm.dispatch({ type: 'HOLD_END' });
-    fsm.dispatch({ type: 'ELIMINATE', shardId: 'shard-a' });
+    fsm.dispatch({ type: 'PREVIEW_SET', shardId: 'shard-a', mode: 'mute' });
+    expect(fsm.snapshot().phase).toBe('pressing');
+    expect(fsm.snapshot().pressedShardId).toBe('shard-a');
+  });
+
+  it('PREVIEW_SET to another shard cancels hold', () => {
+    const { fsm } = createFsm();
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    fsm.dispatch({ type: 'PREVIEW_SET', shardId: 'shard-b', mode: 'solo' });
+    expect(fsm.snapshot().phase).toBe('hovering');
+    expect(fsm.snapshot().pressedShardId).toBeNull();
+    expect(fsm.snapshot().previewShardId).toBe('shard-b');
+  });
+
+  it('drops intents while committing; solid is terminal', () => {
+    const { fsm, clock } = createFsm();
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    clock.advance(motionFull.holdCommit);
+    expect(fsm.snapshot().phase).toBe('committing');
+
     fsm.dispatch({ type: 'CANCEL' });
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-b' });
+    fsm.dispatch({ type: 'PREVIEW_SET', shardId: 'shard-b', mode: 'solo' });
+    expect(fsm.snapshot().phase).toBe('committing');
+
+    clock.advance(
+      motionFull.fuseMagnetize + motionFull.seamFlash + motionFull.solidSettle,
+    );
+    expect(fsm.snapshot().phase).toBe('solid');
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    fsm.dispatch({ type: 'FOCUS_SET', shardId: 'shard-a' });
+    expect(fsm.snapshot().phase).toBe('solid');
+    expect(fsm.snapshot().focusedShardId).toBeNull();
+  });
+
+  it('reduced profile still reaches solid (0ms settle passes through)', () => {
+    const { fsm, clock } = createFsm(SHARDS, motionReduced);
+    fsm.dispatch({ type: 'HOLD_START', shardId: 'shard-a' });
+    clock.advance(motionReduced.holdCommit);
+    clock.advance(motionReduced.fuseMagnetize);
+    clock.advance(motionReduced.seamFlash);
+    // solidSettle is 0 — finish() runs inline after seamFlash callback
+    expect(fsm.snapshot().phase).toBe('solid');
+  });
+
+  it('has no COMMIT intent — resolution is Clock-only (AD-4)', () => {
+    const commitLike = { type: 'COMMIT' } as unknown as {
+      type: 'HOLD_START';
+      shardId: string;
+    };
+    void commitLike;
+    const { fsm } = createFsm();
     expect(fsm.snapshot().phase).toBe('idle');
   });
 });

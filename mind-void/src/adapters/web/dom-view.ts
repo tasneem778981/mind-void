@@ -108,21 +108,40 @@ export class DomView {
     node.setAttribute('data-decision-node', 'node-1');
     node.classList.add('mv-decision-node');
 
+    if (snapshot.phase === 'solid') {
+      this.renderSolidCharge(node, geometry);
+      this.svg.append(node);
+      this.svg.removeAttribute('role');
+      return;
+    }
+
     for (const shard of geometry.shards) {
       const group = document.createElementNS(SVG_NS, 'g');
       group.setAttribute('data-shard-id', shard.id);
       group.setAttribute('data-shard-index', String(shard.index));
       group.classList.add('mv-shard');
-      group.style.transform = `translate(${shard.placeX}px, ${shard.placeY}px)`;
+      if (snapshot.phase === 'committing') {
+        group.dataset.committing = '1';
+        group.style.setProperty('--mv-place-x', `${shard.placeX}px`);
+        group.style.setProperty('--mv-place-y', `${shard.placeY}px`);
+      } else {
+        group.style.transform = `translate(${shard.placeX}px, ${shard.placeY}px)`;
+      }
 
       if (
         snapshot.previewShardId === shard.id &&
-        (snapshot.previewMode === 'solo' || snapshot.previewMode === 'mute')
+        (snapshot.previewMode === 'solo' || snapshot.previewMode === 'mute') &&
+        snapshot.phase !== 'pressing' &&
+        snapshot.phase !== 'committing'
       ) {
         group.dataset.preview = snapshot.previewMode;
       }
 
-      if (snapshot.focusedShardId === shard.id) {
+      if (snapshot.pressedShardId === shard.id) {
+        group.dataset.pressed = '1';
+      }
+
+      if (snapshot.focusedShardId === shard.id && snapshot.phase !== 'committing') {
         group.dataset.focused = '1';
       }
 
@@ -135,7 +154,7 @@ export class DomView {
       body.classList.add('mv-shard-body');
       body.setAttribute('data-shard-id', shard.id);
       body.setAttribute('data-zone', 'body');
-      body.setAttribute('tabindex', '0');
+      body.setAttribute('tabindex', snapshot.phase === 'committing' ? '-1' : '0');
       body.setAttribute('role', 'option');
       body.setAttribute('aria-label', label);
       body.setAttribute(
@@ -152,12 +171,32 @@ export class DomView {
       rim.setAttribute('tabindex', '-1');
 
       group.append(body, rim);
+
+      if (snapshot.pressedShardId === shard.id) {
+        const progress = document.createElementNS(SVG_NS, 'path');
+        progress.setAttribute('d', pointsToSvgPath(shard.body));
+        progress.classList.add('mv-hold-progress');
+        progress.setAttribute('aria-hidden', 'true');
+        const len = polygonPerimeter(shard.body);
+        progress.style.setProperty('--mv-hold-len', String(len));
+        progress.style.strokeDasharray = String(len);
+        progress.style.strokeDashoffset = String(len);
+        group.append(progress);
+        // Arm fill on next frame so CSS transition runs from full → 0.
+        requestAnimationFrame(() => {
+          progress.style.strokeDashoffset = '0';
+        });
+      }
+
       node.append(group);
     }
 
     const seams = document.createElementNS(SVG_NS, 'g');
     seams.classList.add('mv-seams');
     seams.setAttribute('aria-hidden', 'true');
+    if (snapshot.phase === 'committing') {
+      seams.dataset.flash = '1';
+    }
     for (const seam of geometry.seams) {
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('d', polylineToSvgPath(seam));
@@ -168,6 +207,29 @@ export class DomView {
 
     this.svg.append(node);
     this.syncDomFocus(snapshot.focusedShardId);
+  }
+
+  private renderSolidCharge(
+    node: SVGGElement,
+    geometry: ShardGeometryResult,
+  ): void {
+    const { nodeCenter, nodeRadius } = geometry;
+    const halo = document.createElementNS(SVG_NS, 'circle');
+    halo.classList.add('mv-solid-halo');
+    halo.setAttribute('cx', String(nodeCenter.x));
+    halo.setAttribute('cy', String(nodeCenter.y));
+    halo.setAttribute('r', String(nodeRadius + 8));
+    halo.setAttribute('aria-hidden', 'true');
+
+    const face = document.createElementNS(SVG_NS, 'circle');
+    face.classList.add('mv-solid-charge');
+    face.setAttribute('cx', String(nodeCenter.x));
+    face.setAttribute('cy', String(nodeCenter.y));
+    face.setAttribute('r', String(nodeRadius));
+    face.setAttribute('role', 'img');
+    face.setAttribute('aria-label', productCopy.thesis);
+
+    node.append(halo, face);
   }
 
   setCursorVisible(visible: boolean): void {
@@ -227,9 +289,14 @@ export class DomView {
 
   private syncCopyForPhase(phase: DecisionNodeSnapshot['phase']): void {
     const isSolid = phase === 'solid';
-    this.hintEl.hidden = isSolid;
+    this.hintEl.hidden = isSolid || phase === 'committing';
     this.thesisEl.hidden = !isSolid;
     this.creditEl.hidden = false;
+    if (isSolid) {
+      this.thesisEl.dataset.lifecycle = 'hold';
+    } else {
+      delete this.thesisEl.dataset.lifecycle;
+    }
   }
 
   /** Apply DOM focus from FSM truth (AD-13 / AD-25). */
@@ -252,4 +319,17 @@ export class DomView {
     this.lastFocusedId = focusedShardId;
     body.focus({ preventScroll: true });
   }
+}
+
+function polygonPerimeter(
+  points: readonly { x: number; y: number }[],
+): number {
+  if (points.length < 2) return 0;
+  let len = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    len += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return len;
 }
