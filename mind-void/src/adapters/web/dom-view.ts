@@ -163,9 +163,9 @@ export class DomView {
         group.dataset.focused = '1';
       }
 
+      const labels = productCopy.optionLabels ?? [];
       const label =
-        productCopy.optionLabels[shard.index] ??
-        productCopy.optionLabels[productCopy.optionLabels.length - 1]!;
+        labels[shard.index] ?? labels[labels.length - 1] ?? `Option ${shard.index + 1}`;
 
       const body = document.createElementNS(SVG_NS, 'path');
       body.setAttribute('d', pointsToSvgPath(shard.body));
