@@ -61,6 +61,36 @@ body {
   pointer-events: none;
 }
 
+.mv-copy {
+  margin: 0;
+  position: absolute;
+  font-family: var(--mv-type-meta-font-family);
+  font-size: var(--mv-type-meta-font-size);
+  font-weight: var(--mv-type-meta-font-weight);
+  line-height: var(--mv-type-meta-line-height);
+  letter-spacing: var(--mv-type-meta-letter-spacing);
+  pointer-events: none;
+  user-select: none;
+}
+
+.mv-copy-hint,
+.mv-copy-thesis {
+  left: 50%;
+  bottom: var(--mv-space-7);
+  transform: translateX(-50%);
+  text-align: center;
+  color: var(--mv-ink-faint);
+  max-width: min(36rem, calc(100% - 2 * var(--mv-space-5)));
+}
+
+.mv-copy-credit {
+  right: var(--mv-space-5);
+  bottom: var(--mv-space-5);
+  text-align: right;
+  color: var(--mv-ink-secondary);
+  max-width: min(28rem, calc(100% - 2 * var(--mv-space-5)));
+}
+
 .mv-shard {
   transform-box: fill-box;
   transform-origin: 0 0;
