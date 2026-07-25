@@ -10,10 +10,11 @@ import {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+export type CursorMode = 'idle' | 'attract' | 'repulse' | 'hidden';
+
 /**
- * One-way snapshot → DOM (AD-2, AD-7, AD-20).
- * Receives Surface — never imports VoidCanvas (AD-1 / AD-21).
- * Owns microcopy lifecycle display state (hint / thesis / credit).
+ * One-way snapshot → DOM (AD-2, AD-7, AD-10, AD-20).
+ * Cursor **mode** owned here; cursor **position** owned by PointerAdapter.
  */
 export class DomView {
   private readonly surface: Surface;
@@ -22,7 +23,9 @@ export class DomView {
   private readonly hintEl: HTMLParagraphElement;
   private readonly thesisEl: HTMLParagraphElement;
   private readonly creditEl: HTMLParagraphElement;
+  private readonly cursorEl: HTMLDivElement;
   private copyMounted = false;
+  private cursorMounted = false;
 
   constructor(surface: Surface) {
     this.surface = surface;
@@ -41,6 +44,24 @@ export class DomView {
     this.creditEl = document.createElement('p');
     this.creditEl.className = 'mv-copy mv-copy-credit';
     this.creditEl.dataset.copy = 'architecture-credit';
+
+    this.cursorEl = document.createElement('div');
+    this.cursorEl.className = 'mv-cursor';
+    this.cursorEl.dataset.cursor = 'idle';
+    this.cursorEl.setAttribute('aria-hidden', 'true');
+    this.cursorEl.innerHTML = `
+      <span class="mv-cursor-ring"></span>
+      <span class="mv-cursor-dot"></span>
+      <span class="mv-cursor-tick mv-cursor-tick-n"></span>
+      <span class="mv-cursor-tick mv-cursor-tick-e"></span>
+      <span class="mv-cursor-tick mv-cursor-tick-s"></span>
+      <span class="mv-cursor-tick mv-cursor-tick-w"></span>
+    `;
+  }
+
+  /** PointerAdapter writes transform here only (AD-10). */
+  get cursorElement(): HTMLElement {
+    return this.cursorEl;
   }
 
   render(
@@ -58,9 +79,11 @@ export class DomView {
       root.dataset.phase = snapshot.phase;
       root.dataset.idlePulse = motion.idlePulse ? '1' : '0';
       root.dataset.previewMode = snapshot.previewMode;
+      root.style.cursor = 'none';
     }
 
-    this.ensureCopy();
+    this.ensureChrome(root);
+    this.syncCursorMode(snapshot.previewMode);
     this.syncCopyForPhase(snapshot.phase);
 
     while (this.svg.firstChild) {
@@ -100,7 +123,6 @@ export class DomView {
       rim.setAttribute('data-zone', 'rim');
       rim.setAttribute('aria-hidden', 'true');
 
-      // Rim above body so Mute wins on overlap (AD-7)
       group.append(body, rim);
       node.append(group);
     }
@@ -119,6 +141,14 @@ export class DomView {
     this.svg.append(node);
   }
 
+  setCursorVisible(visible: boolean): void {
+    if (!visible) {
+      this.cursorEl.dataset.cursor = 'hidden';
+      return;
+    }
+    // Visibility restored on next render mode sync / pointer move path.
+  }
+
   clear(): void {
     while (this.svg.firstChild) {
       this.svg.removeChild(this.svg.firstChild);
@@ -126,7 +156,17 @@ export class DomView {
     this.hintEl.remove();
     this.thesisEl.remove();
     this.creditEl.remove();
+    this.cursorEl.remove();
     this.copyMounted = false;
+    this.cursorMounted = false;
+  }
+
+  private ensureChrome(root: HTMLElement | null): void {
+    this.ensureCopy();
+    if (!this.cursorMounted && root) {
+      root.append(this.cursorEl);
+      this.cursorMounted = true;
+    }
   }
 
   private ensureCopy(): void {
@@ -140,10 +180,17 @@ export class DomView {
     this.copyMounted = true;
   }
 
-  /**
-   * Cold load: hint visible, thesis hidden, credit always on.
-   * Solid → thesis swap is Epic 3; stub keeps thesis hidden until then.
-   */
+  private syncCursorMode(previewMode: DecisionNodeSnapshot['previewMode']): void {
+    if (this.cursorEl.dataset.cursor === 'hidden') return;
+    const mode: CursorMode =
+      previewMode === 'solo'
+        ? 'attract'
+        : previewMode === 'mute'
+          ? 'repulse'
+          : 'idle';
+    this.cursorEl.dataset.cursor = mode;
+  }
+
   private syncCopyForPhase(phase: DecisionNodeSnapshot['phase']): void {
     const isSolid = phase === 'solid';
     this.hintEl.hidden = isSolid;

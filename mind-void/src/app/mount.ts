@@ -161,6 +161,7 @@ export function mountMindVoid(
     dispatch: (intent) => {
       fsm.dispatch(intent);
     },
+    getCursor: () => view.cursorElement,
   });
   pointer.attach();
 

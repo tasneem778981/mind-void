@@ -155,6 +155,131 @@ body {
   animation: none;
 }
 
+/* Custom cursor — mode by DomView, position by PointerAdapter (AD-10) */
+.mv-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 5;
+  will-change: transform;
+}
+
+.mv-cursor[data-cursor='hidden'] {
+  display: none;
+}
+
+.mv-cursor-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--mv-ink-secondary);
+  box-sizing: border-box;
+}
+
+.mv-cursor-dot {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: var(--mv-charge-glow);
+}
+
+.mv-cursor-tick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 4px;
+  margin-left: -1px;
+  background: var(--mv-ink-secondary);
+  transform-origin: center 0;
+}
+
+.mv-cursor-tick-n {
+  transform: translateY(-7px);
+}
+.mv-cursor-tick-e {
+  transform: rotate(90deg) translateY(-7px);
+}
+.mv-cursor-tick-s {
+  transform: rotate(180deg) translateY(-7px);
+}
+.mv-cursor-tick-w {
+  transform: rotate(270deg) translateY(-7px);
+}
+
+.mv-cursor[data-cursor='attract'] {
+  width: 18px;
+  height: 18px;
+}
+
+.mv-cursor[data-cursor='attract'] .mv-cursor-ring {
+  border-color: var(--mv-charge-glow);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--mv-charge-glow) 50%, transparent);
+}
+
+.mv-cursor[data-cursor='attract'] .mv-cursor-dot {
+  display: block;
+}
+
+.mv-cursor[data-cursor='attract'] .mv-cursor-tick {
+  background: var(--mv-charge-glow);
+  /* inward: ticks point toward center */
+  height: 5px;
+}
+
+.mv-cursor[data-cursor='attract'] .mv-cursor-tick-n {
+  transform: translateY(-8px);
+}
+.mv-cursor[data-cursor='attract'] .mv-cursor-tick-e {
+  transform: rotate(90deg) translateY(-8px);
+}
+.mv-cursor[data-cursor='attract'] .mv-cursor-tick-s {
+  transform: rotate(180deg) translateY(-8px);
+}
+.mv-cursor[data-cursor='attract'] .mv-cursor-tick-w {
+  transform: rotate(270deg) translateY(-8px);
+}
+
+.mv-cursor[data-cursor='repulse'] {
+  width: 12px;
+  height: 12px;
+}
+
+.mv-cursor[data-cursor='repulse'] .mv-cursor-ring {
+  border-color: var(--mv-repulse-edge);
+}
+
+.mv-cursor[data-cursor='repulse'] .mv-cursor-dot {
+  display: none;
+}
+
+.mv-cursor[data-cursor='repulse'] .mv-cursor-tick {
+  background: var(--mv-repulse-edge);
+  height: 4px;
+  /* outward: ticks start from ring edge */
+}
+
+.mv-cursor[data-cursor='repulse'] .mv-cursor-tick-n {
+  transform: translateY(-9px);
+}
+.mv-cursor[data-cursor='repulse'] .mv-cursor-tick-e {
+  transform: rotate(90deg) translateY(-9px);
+}
+.mv-cursor[data-cursor='repulse'] .mv-cursor-tick-s {
+  transform: rotate(180deg) translateY(-9px);
+}
+.mv-cursor[data-cursor='repulse'] .mv-cursor-tick-w {
+  transform: rotate(270deg) translateY(-9px);
+}
+
 @keyframes mv-idle-pulse {
   0%,
   100% {
